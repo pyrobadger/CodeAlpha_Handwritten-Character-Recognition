@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Handwritten Character Recognition</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tensorflow/4.10.0/tf.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            padding: 40px;
+            max-width: 800px;
+            width: 100%;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.7);
+            border-radius: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .section h2 {
+            color: #555;
+            margin-bottom: 15px;
+            font-size: 1.5em;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 25px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .primary-btn {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .primary-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .secondary-btn {
+            background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+            color: white;
+            box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3);
+        }
+
+        .secondary-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255, 107, 107, 0.4);
+        }
+
+        .canvas-container {
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        canvas {
+            border: 3px solid #ddd;
+            border-radius: 10px;
+            cursor: crosshair;
+            background: white;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .prediction-result {
+            text-align: center;
+            font-size: 2em;
+            font-weight: bold;
+            color: #333;
+            margin: 20px 0;
+            padding: 20px;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .confidence-bar {
+            width: 100%;
+            height: 20px;
+            background: #f0f0f0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+
+        .confidence-fill {
+            height: 100%;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            transition: width 0.3s ease;
+            border-radius: 10px;
+        }
+
+        .status {
+            text-align: center;
+            margin: 15px 0;
+            padding: 10px;
+            border-radius: 8px;
+            font-weight: 600;
+        }
+
+        .status.loading {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #f0f0f0;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            transition: width 0.3s ease;
+        }
+
+        .model-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .info-card {
+            background: rgba(255, 255, 255, 0.8);
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .info-card h3 {
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 20px;
+            }
+            
+            h1 {
+                font-size: 2em;
+            }
+            
+            .controls {
+                flex-direction: column;
+            }
+            
+            button {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎯 Handwritten Character Recognition</h1>
+        
+        <div class="section">
+            <h2>📊 Model Training</h2>
+            <div class="controls">
+                <button id="loadDataBtn" class="primary-btn">Load MNIST Data</button>
+                <button id="trainModelBtn" class="primary-btn" disabled>Train Model</button>
+                <button id="saveModelBtn" class="secondary-btn" disabled>Save Model</button>
+            </div>
+            <div id="trainingStatus" class="status" style="display: none;"></div>
+            <div id="trainingProgress" class="progress-bar" style="display: none;">
+                <div id="trainingProgressFill" class="progress-fill" style="width: 0%;"></div>
+            </div>
+            <div class="model-info">
+                <div class="info-card">
+                    <h3>Dataset</h3>
+                    <p id="datasetInfo">Not loaded</p>
+                </div>
+                <div class="info-card">
+                    <h3>Model Status</h3>
+                    <p id="modelStatus">Not trained</p>
+                </div>
+                <div class="info-card">
+                    <h3>Accuracy</h3>
+                    <p id="accuracyInfo">-</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>✍️ Draw & Predict</h2>
+            <div class="canvas-container">
+                <canvas id="drawingCanvas" width="280" height="280"></canvas>
+            </div>
+            <div class="controls">
+                <button id="clearCanvas" class="secondary-btn">Clear Canvas</button>
+                <button id="predictBtn" class="primary-btn" disabled>Predict Character</button>
+            </div>
+            <div id="predictionResult" class="prediction-result"></div>
+            <div id="confidenceContainer" style="display: none;">
+                <p>Confidence: <span id="confidenceText">0%</span></p>
+                <div class="confidence-bar">
+                    <div id="confidenceFill" class="confidence-fill" style="width: 0%;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class HandwrittenRecognition {
+            constructor() {
+                this.model = null;
+                this.trainData = null;
+                this.testData = null;
+                this.isDrawing = false;
+                this.canvas = document.getElementById('drawingCanvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.setupCanvas();
+                this.setupEventListeners();
+            }
+
+            setupCanvas() {
+                this.ctx.fillStyle = 'white';
+                this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+                this.ctx.strokeStyle = 'black';
+                this.ctx.lineWidth = 8;
+                this.ctx.lineCap = 'round';
+            }
+
+            setupEventListeners() {
+                document.getElementById('loadDataBtn').addEventListener('click', () => this.loadData());
+                document.getElementById('trainModelBtn').addEventListener('click', () => this.trainModel());
+                document.getElementById('saveModelBtn').addEventListener('click', () => this.saveModel());
+                document.getElementById('clearCanvas').addEventListener('click', () => this.clearCanvas());
+                document.getElementById('predictBtn').addEventListener('click', () => this.predictDrawing());
+
+                // Canvas drawing events
+                this.canvas.addEventListener('mousedown', (e) => this.startDrawing(e));
+                this.canvas.addEventListener('mousemove', (e) => this.draw(e));
+                this.canvas.addEventListener('mouseup', () => this.stopDrawing());
+                this.canvas.addEventListener('mouseout', () => this.stopDrawing());
+
+                // Touch events for mobile
+                this.canvas.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    const touch = e.touches[0];
+                    const mouseEvent = new MouseEvent('mousedown', {
+                        clientX: touch.clientX,
+                        clientY: touch.clientY
+                    });
+                    this.canvas.dispatchEvent(mouseEvent);
+                });
+
+                this.canvas.addEventListener('touchmove', (e) => {
+                    e.preventDefault();
+                    const touch = e.touches[0];
+                    const mouseEvent = new MouseEvent('mousemove', {
+                        clientX: touch.clientX,
+                        clientY: touch.clientY
+                    });
+                    this.canvas.dispatchEvent(mouseEvent);
+                });
+
+                this.canvas.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    const mouseEvent = new MouseEvent('mouseup', {});
+                    this.canvas.dispatchEvent(mouseEvent);
+                });
+            }
+
+            startDrawing(e) {
+                this.isDrawing = true;
+                const rect = this.canvas.getBoundingClientRect();
+                this.ctx.beginPath();
+                this.ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
+            }
+
+            draw(e) {
+                if (!this.isDrawing) return;
+                const rect = this.canvas.getBoundingClientRect();
+                this.ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
+                this.ctx.stroke();
+            }
+
+            stopDrawing() {
+                this.isDrawing = false;
+            }
+
+            clearCanvas() {
+                this.ctx.fillStyle = 'white';
+                this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+                document.getElementById('predictionResult').textContent = '';
+                document.getElementById('confidenceContainer').style.display = 'none';
+            }
+
+            showStatus(message, type = 'loading') {
+                const statusEl = document.getElementById('trainingStatus');
+                statusEl.textContent = message;
+                statusEl.className = `status ${type}`;
+                statusEl.style.display = 'block';
+            }
+
+            updateProgress(progress) {
+                const progressBar = document.getElementById('trainingProgress');
+                const progressFill = document.getElementById('trainingProgressFill');
+                progressBar.style.display = 'block';
+                progressFill.style.width = `${progress * 100}%`;
+            }
+
+            async loadData() {
+                try {
+                    this.showStatus('Generating synthetic MNIST-style dataset...', 'loading');
+                    
+                    // Create synthetic data that mimics MNIST structure
+                    this.trainData = this.createSyntheticData(5000, 'train');
+                    this.testData = this.createSyntheticData(1000, 'test');
+                    
+                    document.getElementById('datasetInfo').textContent = 'Synthetic MNIST (5k train, 1k test)';
+                    document.getElementById('trainModelBtn').disabled = false;
+                    this.showStatus('Dataset generated successfully!', 'success');
+                    
+                } catch (error) {
+                    console.error('Error generating data:', error);
+                    this.showStatus('Error generating dataset.', 'error');
+                }
+            }
+
+            createSyntheticData(numSamples, type) {
+                // Create synthetic handwritten digit data for demonstration
+                const images = [];
+                const labels = [];
+                
+                for (let i = 0; i < numSamples; i++) {
+                    const digit = Math.floor(Math.random() * 10);
+                    const image = this.generateDigitImage(digit);
+                    images.push(...image); // Flatten the image array
+                    labels.push(digit);
+                }
+                
+                return {
+                    images: tf.tensor4d(images, [numSamples, 28, 28, 1]),
+                    labels: tf.oneHot(tf.tensor1d(labels, 'int32'), 10)
+                };
+            }
+
+            generateDigitImage(digit) {
+                // Generate more realistic synthetic images for digits
+                const image = new Array(28 * 28).fill(0);
+                
+                // Define basic digit patterns
+                const patterns = {
+                    0: this.drawCircle,
+                    1: this.drawVerticalLine,
+                    2: this.drawCurvedTop,
+                    3: this.drawTwoHumps,
+                    4: this.drawTriangle,
+                    5: this.drawCurvedBottom,
+                    6: this.drawLoop,
+                    7: this.drawDiagonal,
+                    8: this.drawDoubleLoop,
+                    9: this.drawInvertedLoop
+                };
+                
+                // Generate base pattern
+                const pattern = patterns[digit] || this.drawCircle;
+                pattern.call(this, image, 14, 14, 8);
+                
+                // Add noise and variation
+                for (let i = 0; i < 28 * 28; i++) {
+                    if (image[i] > 0) {
+                        // Add some randomness to make it more realistic
+                        image[i] = Math.min(1, image[i] + (Math.random() - 0.5) * 0.3);
+                    }
+                    // Add small amount of background noise
+                    else if (Math.random() < 0.05) {
+                        image[i] = Math.random() * 0.2;
+                    }
+                }
+                
+                return image;
+            }
+
+            // Helper functions for drawing digit patterns
+            drawCircle(image, centerX, centerY, radius) {
+                for (let i = 0; i < 28; i++) {
+                    for (let j = 0; j < 28; j++) {
+                        const dist = Math.sqrt((i - centerX) ** 2 + (j - centerY) ** 2);
+                        if (dist > radius - 2 && dist < radius + 2) {
+                            image[i * 28 + j] = Math.max(0, 1 - Math.abs(dist - radius) / 2);
+                        }
+                    }
+                }
+            }
+
+            drawVerticalLine(image, centerX, centerY, height) {
+                for (let i = centerY - height; i < centerY + height; i++) {
+                    if (i >= 0 && i < 28) {
+                        const j = centerX;
+                        if (j >= 0 && j < 28) {
+                            image[i * 28 + j] = 0.9;
+                            if (j > 0) image[i * 28 + j - 1] = 0.6;
+                            if (j < 27) image[i * 28 + j + 1] = 0.6;
+                        }
+                    }
+                }
+            }
+
+            drawCurvedTop(image, centerX, centerY, size) {
+                // Draw 2-like pattern
+                for (let i = 0; i < 28; i++) {
+                    for (let j = 0; j < 28; j++) {
+                        const x = j - centerX;
+                        const y = i - centerY;
+                        
+                        // Top curve
+                        if (y < -size/2 && Math.abs(x) < size && Math.abs(y + size/2) < 2) {
+                            image[i * 28 + j] = 0.8;
+                        }
+                        // Middle diagonal
+                        else if (Math.abs(x + y) < 2 && x > -size && x < size/2) {
+                            image[i * 28 + j] = 0.8;
+                        }
+                        // Bottom line
+                        else if (y > size/2 && Math.abs(x) < size && Math.abs(y - size/2) < 2) {
+                            image[i * 28 + j] = 0.8;
+                        }
+                    }
+                }
+            }
+
+            drawTwoHumps(image, centerX, centerY, size) {
+                // Draw 3-like pattern
+                for (let i = 0; i < 28; i++) {
+                    for (let j = 0; j < 28; j++) {
+                        const x = j - centerX;
+                        const y = i - centerY;
+                        
+                        if (x > -2 && x < size) {
+                            // Top line
+                            if (Math.abs(y + size/2) < 2) {
+                                image[i * 28 + j] = 0.8;
+                            }
+                            // Middle line
+                            else if (Math.abs(y) < 2) {
+                                image[i * 28 + j] = 0.8;
+                            }
+                            // Bottom line
+                            else if (Math.abs(y - size/2) < 2) {
+                                image[i * 28 + j] = 0.8;
+                            }
+                        }
+                    }
+                }
+            }
+
+            drawTriangle(image, centerX, centerY, size) {
+                // Draw 4-like pattern
+                for (let i = 0; i < 28; i++) {
+                    for (let j = 0; j < 28; j++) {
+                        const x = j - centerX;
+                        const y = i - centerY;
+                        
+                        // Vertical line
+                        if (Math.abs(x - size/2) < 2 && Math.abs(y) < size) {
+                            image[i * 28 + j] = 0.8;
+                        }
+                        // Horizontal line
+                        else if (Math.abs(y) < 2 && x > -size/2 && x < size) {
+                            image[i * 28 + j] = 0.8;
+                        }
+                        // Diagonal line
+                        else if (Math.abs(x + y) < 2 && y < 0 && x < size/2) {
+                            image[i * 28 + j] = 0.8;
+                        }
+                    }
+                }
+            }
+
+            drawCurvedBottom(image, centerX, centerY, size) {
+                // Draw 5-like pattern
+                for (let i = 0; i < 28; i++) {
+                    for (let j = 0; j < 28; j++) {
+                        const x = j - centerX;
+                        const y = i - centerY;
+                        
+                        // Top line
+                        if (Math.abs(y + size/2) < 2 && x > -size/2 && x < size/2) {
+                            image[i * 28 + j] = 0.8;
+                        }
+                        // Left line
+                        else if (Math.abs(x + size/2) < 2 && y > -size/2 && y < 0) {
+                            image[i * 28 + j] = 0.8;
+                        }
+                        // Middle line
+                        else if (Math.abs(y) < 2 && x > -size/2 && x < size/2) {
+                            image[i * 28 + j] = 0.8;
+                        }
+                        // Bottom curve
+                        else if (y > 0) {
+                            const dist = Math.sqrt(x ** 2 + (y - size/4) ** 2);
+                            if (Math.abs(dist - size/3) < 2) {
+                                image[i * 28 + j] = 0.8;
+                            }
+                        }
+                    }
+                }
+            }
+
+            drawLoop(image, centerX, centerY, size) {
+                // Draw 6-like pattern
+                for (let i = 0; i < 28; i++) {
+                    for (let j = 0; j < 28; j++) {
+                        const x = j - centerX;
+                        const y = i - centerY;
+                        const dist = Math.sqrt(x ** 2 + y ** 2);
+                        
+                        if (Math.abs(dist - size/2) < 2 && y > -size/4) {
+                            image[i * 28 + j] = 0.8;
+                        }
+                    }
+                }
+            }
+
+            drawDiagonal(image, centerX, centerY, size) {
+                // Draw 7-like pattern
+                for (let i = 0; i < 28; i++) {
+                    for (let j = 0; j < 28; j++) {
+                        const x = j - centerX;
+                        const y = i - centerY;
+                        
+                        // Top line
+                        if (Math.abs(y + size/2) < 2 && x > -size/2 && x < size/2) {
+                            image[i * 28 + j] = 0.8;
+                        }
+                        // Diagonal line
+                        else if (Math.abs(x - y/2) < 2 && y > -size/2 && y < size/2) {
+                            image[i * 28 + j] = 0.8;
+                        }
+                    }
+                }
+            }
+
+            drawDoubleLoop(image, centerX, centerY, size) {
+                // Draw 8-like pattern
+                for (let i = 0; i < 28; i++) {
+                    for (let j = 0; j < 28; j++) {
+                        const x = j - centerX;
+                        const y = i - centerY;
+                        
+                        // Top circle
+                        const dist1 = Math.sqrt(x ** 2 + (y + size/4) ** 2);
+                        if (Math.abs(dist1 - size/3) < 2) {
+                            image[i * 28 + j] = 0.8;
+                        }
+                        
+                        // Bottom circle
+                        const dist2 = Math.sqrt(x ** 2 + (y - size/4) ** 2);
+                        if (Math.abs(dist2 - size/3) < 2) {
+                            image[i * 28 + j] = 0.8;
+                        }
+                    }
+                }
+            }
+
+            drawInvertedLoop(image, centerX, centerY, size) {
+                // Draw 9-like pattern
+                for (let i = 0; i < 28; i++) {
+                    for (let j = 0; j < 28; j++) {
+                        const x = j - centerX;
+                        const y = i - centerY;
+                        const dist = Math.sqrt(x ** 2 + y ** 2);
+                        
+                        if (Math.abs(dist - size/2) < 2 && y < size/4) {
+                            image[i * 28 + j] = 0.8;
+                        }
+                    }
+                }
+            }
+
+            createModel() {
+                const model = tf.sequential({
+                    layers: [
+                        tf.layers.conv2d({
+                            inputShape: [28, 28, 1],
+                            kernelSize: 3,
+                            filters: 32,
+                            activation: 'relu'
+                        }),
+                        tf.layers.maxPooling2d({poolSize: 2}),
+                        tf.layers.conv2d({
+                            kernelSize: 3,
+                            filters: 64,
+                            activation: 'relu'
+                        }),
+                        tf.layers.maxPooling2d({poolSize: 2}),
+                        tf.layers.flatten(),
+                        tf.layers.dropout({rate: 0.25}),
+                        tf.layers.dense({units: 128, activation: 'relu'}),
+                        tf.layers.dropout({rate: 0.5}),
+                        tf.layers.dense({units: 10, activation: 'softmax'})
+                    ]
+                });
+
+                model.compile({
+                    optimizer: tf.train.adam(0.001),
+                    loss: 'categoricalCrossentropy',
+                    metrics: ['accuracy']
+                });
+
+                return model;
+            }
+
+            async trainModel() {
+                try {
+                    this.showStatus('Creating model architecture...', 'loading');
+                    this.model = this.createModel();
+                    
+                    this.showStatus('Training model...', 'loading');
+                    document.getElementById('modelStatus').textContent = 'Training...';
+                    
+                    const epochs = 5;
+                    let currentEpoch = 0;
+                    
+                    const history = await this.model.fit(this.trainData.images, this.trainData.labels, {
+                        epochs: epochs,
+                        validationData: [this.testData.images, this.testData.labels],
+                        callbacks: {
+                            onEpochEnd: (epoch, logs) => {
+                                currentEpoch = epoch + 1;
+                                const progress = currentEpoch / epochs;
+                                this.updateProgress(progress);
+                                
+                                const accuracy = (logs.val_acc * 100).toFixed(1);
+                                this.showStatus(`Epoch ${currentEpoch}/${epochs} - Accuracy: ${accuracy}%`, 'loading');
+                                document.getElementById('accuracyInfo').textContent = `${accuracy}%`;
+                            }
+                        }
+                    });
+                    
+                    const finalAccuracy = (history.history.val_acc[history.history.val_acc.length - 1] * 100).toFixed(1);
+                    document.getElementById('modelStatus').textContent = 'Trained';
+                    document.getElementById('accuracyInfo').textContent = `${finalAccuracy}%`;
+                    document.getElementById('predictBtn').disabled = false;
+                    document.getElementById('saveModelBtn').disabled = false;
+                    
+                    this.showStatus(`Training completed! Final accuracy: ${finalAccuracy}%`, 'success');
+                    
+                } catch (error) {
+                    console.error('Training error:', error);
+                    this.showStatus('Training failed. Please try again.', 'error');
+                }
+            }
+
+            async saveModel() {
+                try {
+                    this.showStatus('Saving model...', 'loading');
+                    await this.model.save('downloads://handwritten-digit-model');
+                    this.showStatus('Model saved successfully!', 'success');
+                } catch (error) {
+                    console.error('Save error:', error);
+                    this.showStatus('Failed to save model.', 'error');
+                }
+            }
+
+            async predictDrawing() {
+                if (!this.model) {
+                    alert('Please train the model first!');
+                    return;
+                }
+
+                try {
+                    // Get image data from canvas
+                    const imageData = this.ctx.getImageData(0, 0, 280, 280);
+                    
+                    // Convert to grayscale and resize to 28x28
+                    const resized = this.resizeImage(imageData, 28, 28);
+                    const normalized = resized.map(pixel => pixel / 255.0);
+                    
+                    // Create tensor with proper format - use Float32Array for TypedArray
+                    const inputArray = new Float32Array(normalized);
+                    const inputTensor = tf.tensor4d(inputArray, [1, 28, 28, 1]);
+                    
+                    const predictions = await this.model.predict(inputTensor);
+                    const probabilities = await predictions.data();
+                    
+                    // Find the predicted digit
+                    const predictedDigit = probabilities.indexOf(Math.max(...probabilities));
+                    const confidence = Math.max(...probabilities);
+                    
+                    // Display results
+                    document.getElementById('predictionResult').textContent = `Predicted: ${predictedDigit}`;
+                    document.getElementById('confidenceText').textContent = `${(confidence * 100).toFixed(1)}%`;
+                    document.getElementById('confidenceFill').style.width = `${confidence * 100}%`;
+                    document.getElementById('confidenceContainer').style.display = 'block';
+                    
+                    // Cleanup
+                    inputTensor.dispose();
+                    predictions.dispose();
+                    
+                } catch (error) {
+                    console.error('Prediction error:', error);
+                    alert('Prediction failed. Please try again.');
+                }
+            }
+
+            resizeImage(imageData, width, height) {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                canvas.width = width;
+                canvas.height = height;
+                
+                // Create temporary canvas with original image
+                const tempCanvas = document.createElement('canvas');
+                const tempCtx = tempCanvas.getContext('2d');
+                tempCanvas.width = imageData.width;
+                tempCanvas.height = imageData.height;
+                tempCtx.putImageData(imageData, 0, 0);
+                
+                // Resize
+                ctx.drawImage(tempCanvas, 0, 0, width, height);
+                const resizedData = ctx.getImageData(0, 0, width, height);
+                
+                // Convert to grayscale
+                const grayscale = [];
+                for (let i = 0; i < resizedData.data.length; i += 4) {
+                    const r = resizedData.data[i];
+                    const g = resizedData.data[i + 1];
+                    const b = resizedData.data[i + 2];
+                    const gray = 255 - (0.299 * r + 0.587 * g + 0.114 * b); // Invert for MNIST format
+                    grayscale.push(gray);
+                }
+                
+                return grayscale;
+            }
+        }
+
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', () => {
+            new HandwrittenRecognition();
+        });
+    </script>
+</body>
+</html>
